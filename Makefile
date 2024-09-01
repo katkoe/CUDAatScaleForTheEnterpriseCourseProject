@@ -31,21 +31,42 @@
 #
 ################################################################################
 
+# Attempt to compile a minimal application linked against FreeImage. If a.out exists, FreeImage is properly set up.
+$(shell echo "#include \"FreeImage.h\"" > test.c; echo "int main() { return 0; }" >> test.c ; $(NVCC) $(ALL_CCFLAGS) $(INCLUDES) $(ALL_LDFLAGS) $(LIBRARIES) -l freeimage test.c)
+FREEIMAGE := $(shell find a.out 2>/dev/null)
+$(shell rm a.out test.c 2>/dev/null)
+
 # Define the compiler and flags
 NVCC = /usr/local/cuda/bin/nvcc
 CXX = g++
-CXXFLAGS = -std=c++11 -I/usr/local/cuda/include -Iinclude
-LDFLAGS = -L/usr/local/cuda/lib64 -lcudart -lnppc -lnppial -lnppicc -lnppidei -lnppif -lnppig -lnppim -lnppist -lnppisu -lnppitc
+CXXFLAGS = -std=c++11 -I/usr/local/cuda/include -Iinclude $(INCLUDES) -I/usr/local/include
+LDFLAGS = -L/usr/local/cuda/lib64 -L/usr/local/lib -lcudart -lnppc -lnppial -lnppicc -lnppidei -lnppif -lnppig -lnppim -lnppist -lnppisu -lnppitc -lfreeimage
+
+# Add CUDA path
+CUDA_PATH ?= /usr/local/cuda
+NPP_Lib ?= -lnppisu_static -lnppif_static -lnppc_static -lculibos -lfreeimage
+#NPP_LIB  ?= -lnppif -lnppig -lnppc -lnppidei -lnppicc -lnppicom
+
+# Adding appropriate NPP library flags
+LDFLAGS += $(NPP_LIB)
+
+# Add necessary include paths
+INCLUDES = -ICommon -I$(CUDA_PATH) -Iinclude -ICommon/UtilNPP
+
+# Add lib paths
+LIBRARIES = -lnppisu_static -lnppif_static -lnppc_static -lculibos -lfreeimage
 
 # Define directories
 SRC_DIR = src
 BIN_DIR = bin
 DATA_DIR = data
 LIB_DIR = lib
+OUTPUT_DIR = $(DATA_DIR)/outputs
+
 
 # Define source files and target executable
-SRC = $(SRC_DIR)/imageRotationNPP.cpp
-TARGET = $(BIN_DIR)/imageRotationNPP
+SRC = $(SRC_DIR)/edgeDetectionNPP.cpp
+TARGET = $(BIN_DIR)/edgeDetectionNPP
 
 # Define the default rule
 all: $(TARGET)
@@ -53,11 +74,16 @@ all: $(TARGET)
 # Rule for building the target executable
 $(TARGET): $(SRC)
 	mkdir -p $(BIN_DIR)
-	$(NVCC) $(CXXFLAGS) $(SRC) -o $(TARGET) $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET) $(LDFLAGS)
 
-# Rule for running the application
+# Rule for running the application (loops through jpg/jpeg images in data folder)
 run: $(TARGET)
-	./$(TARGET) --input $(DATA_DIR)/Lena.png --output $(DATA_DIR)/Lena_rotated.png
+	mkdir -p $(OUTPUT_DIR)
+	for file in $(DATA_DIR)/*.jpg $(DATA_DIR)/*.jpeg; do \
+		[ -e "$$file" ] || continue; \
+		filename=$$(basename "$$file"); \
+		./$(TARGET) --input "$$file" --output $(OUTPUT_DIR)/"$${filename%.*}_output.jpg"; \
+	done
 
 # Clean up
 clean:
